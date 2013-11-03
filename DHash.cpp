@@ -15,19 +15,19 @@
 CDHash::CDHash()
 {
         this->UpdateProgress = 0;
-		Initialize(1024);
+	Initialize(1024);
 }
 
 CDHash::CDHash(int hashLen)
 {
         this->UpdateProgress = 0;
-		Initialize(hashLen);
+	Initialize(hashLen);
 }
 
 CDHash::CDHash(int hashLen, void (*UpdateProgress)(int progress))
 {
 	// Подписываемся на функтор-обработчик обновления прогресса
-    this->UpdateProgress = UpdateProgress;
+	this->UpdateProgress = UpdateProgress;
 	Initialize(hashLen);
 }
 

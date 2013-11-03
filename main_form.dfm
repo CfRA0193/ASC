@@ -3,7 +3,7 @@ object MainForm: TMainForm
   Top = 176
   BorderIcons = [biSystemMenu, biMinimize]
   BorderStyle = bsSingle
-  Caption = 'ASC - Absolutely Safe Chat 1.3.0.3'
+  Caption = 'ASC - Absolutely Safe Chat 1.4.0.0'
   ClientHeight = 417
   ClientWidth = 433
   Color = clBtnFace
@@ -1032,15 +1032,15 @@ object MainForm: TMainForm
     Panels = <
       item
         Text = ' Mode: Idle'
-        Width = 73
+        Width = 78
       end
       item
-        Text = ' Protection: NO'
-        Width = 84
+        Text = ' Protect: NO'
+        Width = 80
       end
       item
         Text = ' Connected to: '
-        Width = 209
+        Width = 208
       end
       item
         Text = ' Port: 1024'

@@ -2,8 +2,8 @@
 //* ASC - Absolutely Safe Chat                         *
 //******************************************************
 //* main_form.cpp                                      *
-//* Дата:    4.02.2006                                 *
-//* Версия:  1.3.0.3	                               *
+//* Дата:    03.11.2013                                *
+//* Версия:  1.4.0.0	                               *
 //* Автор:   Дробанов Артём Федорович (DrAF)           *
 //******************************************************
 
@@ -19,6 +19,20 @@
 #pragma resource "*.dfm"
 //---------------------------------------------------------------------------
 TMainForm *MainForm;
+//---------------------------------------------------------------------------
+typedef __int32           int32;
+typedef __int64           int64;
+typedef unsigned __int32  uint32;
+typedef unsigned __int64  uint64;
+class Random // by Eugene Roshal (public domain)
+{
+  private:
+    uint32 x,y,z,w;
+  public:
+    Random(uint32 Seed) { x = Seed; y = 362436069; z = 521288629; w = 88675123; }
+    uint32 Get32()    { uint32 t = x ^ (x << 11); x = y; y = z; z = w; return w = w ^ (w >> 19) ^ (t ^ (t >> 8)); }
+    uint64 Get64()    { return (uint64(Get32())<<32) | Get32(); }
+};
 //---------------------------------------------------------------------------
 __fastcall TMainForm::TMainForm(TComponent* Owner)
         : TForm(Owner)
@@ -39,11 +53,11 @@ void __fastcall TMainForm::ChangeListenCondition(TObject *Sender)
         // Если в данный момент слушаем...
         if (FileListenItem->Checked)
         {
-               //... меняем иконку на противоположную
-               ListenSpeedButton->Glyph = ListenOffImage->Glyph;
+                //... меняем иконку на противоположную
+                ListenSpeedButton->Glyph = ListenOffImage->Glyph;
         } else
         {
-             ListenSpeedButton->Glyph = ListenOnImage->Glyph;
+                ListenSpeedButton->Glyph = ListenOnImage->Glyph;
         }
         FileListenItem->Checked = !FileListenItem->Checked;
 
@@ -151,7 +165,7 @@ void __fastcall TMainForm::Disconnect(TObject *Sender)
 
         StatusBar->Panels->Items[0]->Text = " Mode: Idle";
         bProtection = false;
-        StatusBar->Panels->Items[1]->Text = " Protection: NO";
+        StatusBar->Panels->Items[1]->Text = " Protect: NO";
         StatusBar->Panels->Items[2]->Text = " Connected to:";
 
         // Высвобождаем ресурсы
@@ -235,40 +249,42 @@ void __fastcall TMainForm::EncodeSendBuffer(TObject *Sender)
         //         после записанной строки случайные данные
         ConvertAnsiStringToChar(ChatEdit->Text, prgbSendBuffer);
 
-        long int i;
+        long int i, j;
 
         for (i = (ChatEdit->Text.Length() + 1); i < EncryptionBlockSize; i++)
         {
                 prgbSendBuffer[i] = random(256);
         }
 
-        // Шаг 2 - Выбираем случайный индекс в пределах парольного файла
-        //         и "наматываем", начиная с него, 1024 бт. парольных данных,
-        //         заполняя prgbPasswordBuffer2
-        long int lRandPos = random(lPasswordSize);
+        // Инициализируем генератор псевдослучайных чисел для формирования
+        // подключа
+        long int lRandSeed =
+                                (random(256) << 24)
+                        |
+                                (random(256) << 16)
+                        |
+                                (random(256) << 8)
+                        |
+                                 random(256);
 
-        long int j = lRandPos;
+        // Генератор псевдослучайных чисел для формирования подключа
+        Random rnd(lRandSeed);
 
+        // Шаг 2 - Выбираем случайные индексы в пределах парольного файла
+        //         и заполняем prgbPasswordBuffer2
         for (i = 0; i < EncryptionBlockSize; i++)
         {
-                prgbPasswordBuffer2[i] = prgbPasswordBuffer[j];
-                j++;
-                if (j == lPasswordSize)
-                {
-                        j=0;
-                }
+                prgbPasswordBuffer2[i] = prgbPasswordBuffer[rnd.Get32() % lPasswordSize];
         }
 
         // Шаг 3 - Шифрование данных в исходном буфере
         pInKey->Encrypt(prgbSendBuffer, EncryptionBlockSize, prgbPasswordBuffer2);
 
-        // Шаг 4 - Дописываем в конец буфера индекс,
-        // с которого "наматывали" 1 кб. парольных данных
-        IntToRGB.IntVar = lRandPos;
-
-        j = EncryptionBlockSize;
-
-        for (i = 0; i < INT_LENGTH; i++)
+        // Шаг 4 - Дописываем в конец буфера инициализатор генератора
+        //         псевдослучайных чисел
+        IntToRGB.IntVar = lRandSeed;
+        
+        for (i = 0, j = EncryptionBlockSize; i < INT_LENGTH; i++)
         {
                 prgbSendBuffer[j] = IntToRGB.rgbVar[i];
                 j++;
@@ -280,34 +296,23 @@ void __fastcall TMainForm::DecodeSendBuffer(TObject *Sender)
 {
         long int i, j = EncryptionBlockSize;
 
-        // Шаг 1 - Узнаем случайную позицию в парольном файле
+        // Шаг 1 - Узнаем инициализатор генератора псевдослучайных чисел
         for (i = 0; i < INT_LENGTH; i++)
         {
                 IntToRGB.rgbVar[i] = prgbSendBuffer[j];
                 j++;
         }
 
-        unsigned long int ulRandPos = IntToRGB.IntVar;
+        long int lRandSeed = IntToRGB.IntVar;
 
-        // Если парольные файлы не соответствуют друг другу по разм.
-        // скрываем этот факт
-        if (ulRandPos >= lPasswordSize)
-        {
-                ulRandPos = random(lPasswordSize);
-        }
+        // Генератор псевдослучайных чисел для формирования подключа
+        Random rnd(lRandSeed);
 
-        // Шаг 2 - "наматываем" данные из парольного буфера
-
-        j = ulRandPos;
-
+        // Шаг 2 - Выбираем случайные индексы в пределах парольного файла
+        //         и заполняем prgbPasswordBuffer2
         for (i = 0; i < EncryptionBlockSize; i++)
         {
-                prgbPasswordBuffer2[i] = prgbPasswordBuffer[j];
-                j++;
-                if (j == lPasswordSize)
-                {
-                        j=0;
-                }
+                prgbPasswordBuffer2[i] = prgbPasswordBuffer[rnd.Get32() % lPasswordSize];
         }
 
         // Шаг 3 - декодируем данные
@@ -322,7 +327,7 @@ void __fastcall TMainForm::DecodeSendBuffer(TObject *Sender)
 
         while (1)
         {
-                asDecodedStr[i + 1]=prgbSendBuffer[i];
+                asDecodedStr[i + 1] = prgbSendBuffer[i];
                 if (
                                 (prgbSendBuffer[i] == '\0')
                         ||
@@ -516,7 +521,7 @@ void __fastcall TMainForm::SetPasswordFileSpeedButtonClick(TObject *Sender)
 
                         // Указываем, что защита используется
                         bProtection = true;
-                        StatusBar->Panels->Items[1]->Text = " Protection: YES";
+                        StatusBar->Panels->Items[1]->Text = " Protect: YES";
                 }
 
                 return;
@@ -527,8 +532,8 @@ void __fastcall TMainForm::SetPasswordFileSpeedButtonClick(TObject *Sender)
                 // Сначала высвобождаем ресурсы, выделенные под старый
                 // парольный файл
                 FreeObjects();
-                bProtection=false;
-                StatusBar->Panels->Items[1]->Text = " Protection: NO";
+                bProtection = false;
+                StatusBar->Panels->Items[1]->Text = " Protect: NO";
 
                 // Задаем имя максимальной длины
                 char *szPasswordFile = new char [MAX_NAME_LENGTH];
@@ -548,22 +553,26 @@ void __fastcall TMainForm::SetPasswordFileSpeedButtonClick(TObject *Sender)
                 // и читаем его в буфер
                 AllocateObjects();
 
-                fread(prgbPasswordBuffer,lPasswordSize,1,fPassword);
+                // Считываем данные из входного файла...
+                long int dataLen;
+                long int toRead = dataLen = lPasswordSize;
+                long int readed = 0;
+                while((toRead = dataLen - (readed += fread((prgbPasswordBuffer + readed), 1, toRead, fPassword))) != 0) ;
+                
                 fclose(fPassword);
 
                 delete [] szPasswordFile;
 
                 // Указываем, что защита используется
                 bProtection = true;
-                StatusBar->Panels->Items[1]->Text = " Protection: YES";
+                StatusBar->Panels->Items[1]->Text = " Protect: YES";
         }
 }
- //---------------------------------------------------------------------------
+//---------------------------------------------------------------------------
 void __fastcall TMainForm::FileSetPasswordFileItemClick(TObject *Sender)
 {
-SetPasswordFileSpeedButtonClick(Sender);
+        SetPasswordFileSpeedButtonClick(Sender);
 }
-
 //---------------------------------------------------------------------------
 // Ликвидирует данные переданного массива char из соображений
 // безопасности
@@ -622,7 +631,7 @@ void __fastcall TMainForm::AllocateObjects()
                 return;
         }
 
-        // Необходимо для шифрования
+        // Инициализация "штатного" генератора псевдослучайных чисел
         randomize();
 }
 //---------------------------------------------------------------------------
@@ -729,7 +738,7 @@ void __fastcall TMainForm::EditClearClick(TObject *Sender)
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::EditTCPPortClick(TObject *Sender)
 {
-        // Вызываем диалог установки порта...
+          // Вызываем диалог установки порта...
           if (InputQuery("Set to...", "TCP Port:", Port))
           {
              unsigned int TCPPort = StrToInt(Port);
@@ -774,7 +783,7 @@ void __fastcall TMainForm::N16384bitClick(TObject *Sender)
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::N24576bitClick(TObject *Sender)
 {
-         // Если пункт меню ещё не выделен, выделяем
+        // Если пункт меню ещё не выделен, выделяем
         if (!((TMenuItem*)Sender)->Checked)
         {
                 EncryptionBlockSize = 3072;
@@ -814,7 +823,7 @@ void __fastcall TMainForm::ProtectionResetClick(TObject *Sender)
 {
         // Указываем, что защита отключена...
         bProtection = false;
-        StatusBar->Panels->Items[1]->Text = " Protection: NO";
+        StatusBar->Panels->Items[1]->Text = " Protect: NO";
 
         // Высвобождаем ресурсы...
         FreeObjects();
@@ -837,4 +846,4 @@ void __fastcall TMainForm::ExitClick(TObject *Sender)
 {
         Close();
 }
-
+//---------------------------------------------------------------------------

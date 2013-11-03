@@ -2,8 +2,8 @@
 //* ASC - Absolutely Safe Chat                         *
 //******************************************************
 //* main_form.h                                        *
-//* Дата:    10.09.2005                                *
-//* Версия:  1.2.0.1	                               *
+//* Дата:    03.11.2013                                *
+//* Версия:  1.4.0.0	                               *
 //* Автор:   Дробанов Артём Федорович (DrAF)           *
 //******************************************************
 
@@ -172,6 +172,7 @@ private:	// User declarations
         CInKey *pInKey;
         // Декодированная строка для добавления в Memo
         AnsiString asDecodedStr;
+
 public:		// User declarations
 
         __fastcall TMainForm(TComponent* Owner);
